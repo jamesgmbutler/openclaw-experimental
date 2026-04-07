@@ -298,3 +298,16 @@ Send a Telegram image as a document to avoid compression:
 openclaw message send --channel telegram --target @mychat \
   --media ./diagram.png --force-document
 ```
+
+## Media delivery on gateway channels
+
+Channels with `deliveryMode: "gateway"` (such as WhatsApp) forward the media
+file path over JSON-RPC to the Gateway process. The Gateway then reads the file
+and sends it through the channel session. This differs from direct-mode
+channels (such as Discord) where media is resolved in the same process as the
+CLI.
+
+If `openclaw message send --media /path/to/file` sends the text but silently
+drops the file on a gateway channel, see
+[WhatsApp local file delivery](/channels/whatsapp#sending-local-files-via-the-message-tool)
+for troubleshooting steps and workarounds.

@@ -79,6 +79,7 @@ flowchart TD
   B --> G[Cron or heartbeat did not fire or did not deliver]
   B --> H[Node is paired but camera canvas screen exec fails]
   B --> I[Browser tool fails]
+  B --> J[File or media not delivered on gateway channels]
 
   C --> C1[/No replies section/]
   D --> D1[/Control UI section/]
@@ -87,6 +88,7 @@ flowchart TD
   G --> G1[/Automation section/]
   H --> H1[/Node tools section/]
   I --> I1[/Browser section/]
+  J --> J1[/Media delivery section/]
 ```
 
 <AccordionGroup>
@@ -359,6 +361,44 @@ flowchart TD
       - [/tools/browser#missing-browser-command-or-tool](/tools/browser#missing-browser-command-or-tool)
       - [/tools/browser-linux-troubleshooting](/tools/browser-linux-troubleshooting)
       - [/tools/browser-wsl2-windows-remote-cdp-troubleshooting](/tools/browser-wsl2-windows-remote-cdp-troubleshooting)
+
+    </Accordion>
+
+    <Accordion title="File or media not delivered on gateway channels">
+      This applies to channels that use `deliveryMode: "gateway"` (WhatsApp, and
+      others when running through the Gateway). Text arrives but the file
+      attachment is silently missing.
+
+      ```bash
+      openclaw logs --follow
+      openclaw config get tools.fs
+      openclaw config get channels.whatsapp.mediaMaxMb
+      ```
+
+      Good output looks like:
+
+      - No `LocalMediaAccessError` or `path-not-allowed` in logs.
+      - File is under an allowed media root (`~/.openclaw/workspace`, `~/.openclaw/media`).
+      - File size is below the channel media limit.
+
+      Common log signatures:
+
+      - `path-not-allowed` → file is outside all allowed local media roots.
+      - `not-found` → file does not exist or is not readable by the Gateway process.
+      - `invalid-root` → media root configuration issue.
+      - No media error at all → the file path may have been lost in the Gateway
+        JSON-RPC forwarding; use `MEDIA:` directive or `sendAttachment` as a workaround.
+
+      Workarounds:
+
+      - Use `MEDIA: /path/to/file` in agent output instead of the `media:` tool parameter.
+      - Use `sendAttachment` action: `openclaw message sendAttachment --media /path/to/file`.
+      - Use an HTTP URL instead of a local path.
+
+      Deep pages:
+
+      - [/channels/whatsapp#sending-local-files-via-the-message-tool](/channels/whatsapp#sending-local-files-via-the-message-tool)
+      - [/channels/troubleshooting](/channels/troubleshooting)
 
     </Accordion>
   </AccordionGroup>

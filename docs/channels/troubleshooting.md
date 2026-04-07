@@ -37,6 +37,7 @@ Healthy baseline:
 | Connected but no DM replies     | `openclaw pairing list whatsapp`                    | Approve sender or switch DM policy/allowlist.           |
 | Group messages ignored          | Check `requireMention` + mention patterns in config | Mention the bot or relax mention policy for that group. |
 | Random disconnect/relogin loops | `openclaw channels status --probe` + logs           | Re-login and verify credentials directory is healthy.   |
+| File sent via message tool but not delivered | `openclaw logs --follow` for media errors  | Use `MEDIA:` directive or `sendAttachment` action instead. See [WhatsApp local file delivery](/channels/whatsapp#sending-local-files-via-the-message-tool). |
 
 Full troubleshooting: [/channels/whatsapp#troubleshooting](/channels/whatsapp#troubleshooting)
 
