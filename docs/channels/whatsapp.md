@@ -493,9 +493,9 @@ context without a JSON-RPC hop.
 | Behavior | Direct channels (Discord) | Gateway channels (WhatsApp) |
 | --- | --- | --- |
 | Media resolution | Same process as CLI/agent | Gateway process (may differ in cwd, env, permissions) |
-| `MEDIA:` in tool output | Works | Works (bypasses `sendMessage`) |
-| `media:` parameter on message tool | Works | May silently send text-only (see below) |
-| `openclaw message send --media` | Works | May silently send text-only (see below) |
+| `MEDIA:` in tool output | File delivered with text | File delivered with text (bypasses `sendMessage`) |
+| `media:` parameter on message tool | File delivered with text | May silently send text-only (see below) |
+| `openclaw message send --media` | File delivered with text | May silently send text-only (see below) |
 
 When the message tool or CLI `send --media` routes through the Gateway, the
 text portion of the message may be delivered successfully while the file
