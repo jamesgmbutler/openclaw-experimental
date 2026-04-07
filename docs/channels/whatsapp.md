@@ -319,6 +319,7 @@ When the linked self number is also present in `allowFrom`, WhatsApp self-chat s
     - animated GIF playback is supported via `gifPlayback: true` on video sends
     - captions are applied to the first media item when sending multi-media reply payloads
     - media source can be HTTP(S), `file://`, or local paths
+    - see [Sending local files via the message tool](#sending-local-files-via-the-message-tool) for delivery mode considerations when sending local file attachments
   </Accordion>
 
   <Accordion title="Media size limits and fallback behavior">
@@ -461,6 +462,155 @@ Behavior notes:
 
   <Accordion title="Bun runtime warning">
     WhatsApp gateway runtime should use Node. Bun is flagged as incompatible for stable WhatsApp/Telegram gateway operation.
+  </Accordion>
+</AccordionGroup>
+
+## Sending local files via the message tool
+
+When sending local files to WhatsApp through the `message` tool or
+`openclaw message send --media`, the file path travels through the Gateway
+JSON-RPC layer because WhatsApp uses `deliveryMode: "gateway"`. This is
+different from channels like Discord that use `deliveryMode: "direct"` and
+resolve media in the same process.
+
+### How it works
+
+1. The CLI or agent builds a send request containing the file path as a string.
+2. `sendMessage` detects `deliveryMode: "gateway"` and forwards the media path
+   over JSON-RPC to the Gateway process.
+3. The Gateway reconstructs media access (`readFile`, `localRoots`) in its own
+   process context and calls `deliverOutboundPayloads`.
+4. The channel handler reads the file from disk and sends it through the
+   WhatsApp Web session.
+
+By contrast, `MEDIA:` directives in agent tool output bypass `sendMessage`
+entirely. The agent reply pipeline calls `deliverOutboundPayloads` directly in
+the Gateway process, so the file is resolved and read in the same execution
+context without a JSON-RPC hop.
+
+### Known issues and differences from direct channels
+
+| Behavior | Direct channels (Discord) | Gateway channels (WhatsApp) |
+| --- | --- | --- |
+| Media resolution | Same process as CLI/agent | Gateway process (may differ in cwd, env, permissions) |
+| `MEDIA:` in tool output | Works | Works (bypasses `sendMessage`) |
+| `media:` parameter on message tool | Works | May silently send text-only (see below) |
+| `openclaw message send --media` | Works | May silently send text-only (see below) |
+
+When the message tool or CLI `send --media` routes through the Gateway, the
+text portion of the message may be delivered successfully while the file
+attachment is silently dropped. The agent or CLI reports success because the
+text was sent, even though no file was attached.
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Text sent but file missing">
+    **Symptoms**: `openclaw message send --media /path/to/file` reports success,
+    the text arrives on WhatsApp, but no file is attached.
+
+    **Diagnostic steps**:
+
+    1. Check Gateway logs for media errors:
+       ```bash
+       openclaw logs --follow
+       ```
+       Look for `LocalMediaAccessError`, `path-not-allowed`, or
+       `loadOutboundMediaFromUrl` failures.
+
+    2. Verify the file exists and is readable by the Gateway process:
+       ```bash
+       ls -la /path/to/file
+       ```
+
+    3. Confirm the file is under an allowed media root. Default allowed roots
+       include:
+       - `~/.openclaw/media`
+       - `~/.openclaw/workspace`
+       - `~/.openclaw/sandboxes`
+       - The active agent workspace directory
+
+    4. Check `tools.fs.workspaceOnly` in config. When `true`, host file reading
+       is disabled and only sandbox/workspace paths are allowed:
+       ```bash
+       openclaw config get tools.fs
+       ```
+
+    5. Verify file size is within the WhatsApp media limit:
+       ```bash
+       openclaw config get channels.whatsapp.mediaMaxMb
+       ```
+       Default is `50` MB.
+
+  </Accordion>
+
+  <Accordion title="Workarounds for local file delivery">
+    If the `media:` parameter on the message tool does not deliver files to
+    WhatsApp, try these alternatives:
+
+    1. **Use `MEDIA:` directive in tool output** instead of the `media:`
+       parameter. This bypasses the Gateway JSON-RPC layer and resolves the
+       file directly:
+       ```
+       MEDIA: /path/to/file.pdf
+       Here is the document you requested.
+       ```
+
+    2. **Use `sendAttachment` action** which hydrates the file buffer before
+       Gateway dispatch:
+       ```bash
+       openclaw message sendAttachment --channel whatsapp \
+         --target channel:+447876543210 \
+         --media /path/to/file.pdf \
+         --message "Here is the document"
+       ```
+
+    3. **Use an HTTP URL** instead of a local path. If the file is accessible
+       via HTTP(S), use the URL directly. HTTP media is fetched by the Gateway
+       without local file access checks:
+       ```bash
+       openclaw message send --channel whatsapp \
+         --target channel:+447876543210 \
+         --media https://example.com/file.pdf \
+         --message "Here is the document"
+       ```
+
+    4. **Copy the file to the media directory** at `~/.openclaw/media/` which
+       is always in the allowed local roots:
+       ```bash
+       cp /path/to/file.pdf ~/.openclaw/media/
+       openclaw message send --channel whatsapp \
+         --target channel:+447876543210 \
+         --media ~/.openclaw/media/file.pdf \
+         --message "Here is the document"
+       ```
+
+  </Accordion>
+
+  <Accordion title="Diagnosing delivery mode differences">
+    To confirm whether the issue is delivery-mode related:
+
+    1. **Test with Discord** (uses direct delivery):
+       ```bash
+       openclaw message send --channel discord \
+         --target user:123456 --media /path/to/file.pdf \
+         --message "Test"
+       ```
+
+    2. **Test with `MEDIA:` directive** (bypasses `sendMessage`):
+       Ask the agent to include `MEDIA: /path/to/file.pdf` in its response.
+
+    3. **Check verbose output**:
+       ```bash
+       openclaw message send --channel whatsapp \
+         --target channel:+447876543210 \
+         --media /path/to/file.pdf \
+         --message "Test" --verbose
+       ```
+
+    If Discord and `MEDIA:` work but the WhatsApp message tool path does not,
+    the issue is in the Gateway JSON-RPC media forwarding path.
+
   </Accordion>
 </AccordionGroup>
 
